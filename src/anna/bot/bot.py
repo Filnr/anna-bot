@@ -17,6 +17,7 @@ load_dotenv(env_path)
 
 API_TOKEN: Final = os.getenv('BOT_TOKEN')
 BOT_HANDLE: Final = os.getenv('BOT_NAME')
+my_id: Final = os.getenv('ADMIN')
 user_service: Final = services.user_service
 
 # Command to start the bot
@@ -38,18 +39,27 @@ async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user = update.effective_user
+    id = tg_user.id
+    is_registered = user_service.get_name(id)
+    user = user_service.get_name(id)
     # Chama o backend de forma simples
-    user_service.register_user(tg_user.id, tg_user.full_name)
+    if(is_registered):
+        await update.message.reply_text(f"Olá {user}, você ja está registrado!")
+    else:
+        user_service.register_user(id, tg_user.full_name)
+        await update.message.reply_text(f"Olá {user}, você foi registrado!")
 
-    user = user_service.return_name(tg_user.id)
-    await update.message.reply_text(f"Olá {user}, você foi registrado!")
-
-def generate_response(username: str, user_input: str) -> str:
+def generate_response(id: int, username: str, user_input: str) -> str:
     # Custom logic for response generation
     normalized_input: str = user_input.lower()
 
     if 'hi' in normalized_input:
-        return f'Olá {username}, meu lindo gostoso!'
+        is_admin = id == int(my_id)
+        if is_admin:
+            return f'Olá {username}, meu lindo gostoso!'
+        else:
+
+            return f'Olá {username}!'
 
     if 'how are you doing' in normalized_input:
         return 'I am functioning properly!'
@@ -65,7 +75,7 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Extract details of the incoming message
     chat_type: str = update.message.chat.type
     text: str = update.message.text
-    username = user_service.return_name(tg_user.id)
+    username = user_service.get_name(tg_user.id)
     # Logging for troubleshooting
     print(f'User ({update.message.chat.id}) in {chat_type}: "{text}"')
 
@@ -77,7 +87,7 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return  # Ignore messages where bot is not mentioned in a group
     else:
-        response: str = generate_response(username, text)
+        response: str = generate_response(tg_user.id, username, text)
 
     # Reply to the user
     print('Bot response:', response)
