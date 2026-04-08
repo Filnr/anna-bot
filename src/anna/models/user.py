@@ -8,8 +8,8 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(30))
-    added_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    name: Mapped[str] = mapped_column(String(30), unique=True)
+    added_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
     added_at: Mapped[datetime] = mapped_column(default=func.now())
     role: Mapped[str] = mapped_column(String(10))
 

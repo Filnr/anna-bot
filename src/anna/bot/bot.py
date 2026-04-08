@@ -2,19 +2,22 @@ from typing import Final
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+import services.user_service
+from core.database import init_db
+
+init_db()
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-
 print('O bot esta iniciando...')
 
 # Encontra o arquivo .env na raiz do projeto
-env_path = Path(__file__).parent.parent.parent / '.env'
+env_path = Path(__file__).parent.parent.parent.parent / '.env'
 load_dotenv(env_path)
 
 API_TOKEN: Final = os.getenv('BOT_TOKEN')
 BOT_HANDLE: Final = os.getenv('BOT_NAME')
-
+user_service: Final = services.user_service
 
 # Command to start the bot
 async def initiate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -33,13 +36,20 @@ async def personalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('Sim mestre, estou funcionando perfeitamente')
 
+async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tg_user = update.effective_user
+    # Chama o backend de forma simples
+    user_service.register_user(tg_user.id, tg_user.full_name)
 
-def generate_response(user_input: str) -> str:
+    user = user_service.return_name(tg_user.id)
+    await update.message.reply_text(f"Olá {user}, você foi registrado!")
+
+def generate_response(username: str, user_input: str) -> str:
     # Custom logic for response generation
     normalized_input: str = user_input.lower()
 
     if 'hi' in normalized_input:
-        return 'Hello!'
+        return f'Olá {username}, meu lindo gostoso!'
 
     if 'how are you doing' in normalized_input:
         return 'I am functioning properly!'
@@ -51,10 +61,11 @@ def generate_response(user_input: str) -> str:
 
 
 async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tg_user = update.effective_user
     # Extract details of the incoming message
     chat_type: str = update.message.chat.type
     text: str = update.message.text
-
+    username = user_service.return_name(tg_user.id)
     # Logging for troubleshooting
     print(f'User ({update.message.chat.id}) in {chat_type}: "{text}"')
 
@@ -66,7 +77,7 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return  # Ignore messages where bot is not mentioned in a group
     else:
-        response: str = generate_response(text)
+        response: str = generate_response(username, text)
 
     # Reply to the user
     print('Bot response:', response)
@@ -87,6 +98,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('help', assist_command))
     app.add_handler(CommandHandler('custom', personalize_command))
     app.add_handler(CommandHandler('teste', teste))
+    app.add_handler(CommandHandler('register', register_command))
 
     # Register message handler
     app.add_handler(MessageHandler(filters.TEXT, process_message))
