@@ -1,9 +1,8 @@
-from sqlalchemy import except_
+from sqlalchemy import except_, select
 from core.database import Base
 from models.user import User
 from sqlalchemy.orm import Session
-from typing import Optional
-from sqlalchemy import update
+from typing import Optional, Any, Sequence
 
 def create_user(db: Session, user: User) -> User:
     try:
@@ -29,13 +28,28 @@ def delete_user(db: Session, user_name: str) -> None:
     user = db.query(User).filter(User.name == user_name).first()
     db.delete(user)
     db.commit()
-    db.refresh(user)
 
 def delete_user_by_id(db: Session, user_id: int) -> None:
     user = db.query(User).filter(User.id == user_id).first()
     db.delete(user)
     db.commit()
-    db.refresh(user)
+
+def verify_user(db: Session, new_user_id) -> type[User] | None:
+    user = db.get(User, new_user_id)
+    if user and not user.verified:
+        user.verified = True # Altera direto no objeto
+        db.commit()          # O SQLAlchemy percebe a mudança e faz o UPDATE pra você
+        db.refresh(user)
+        return user
+    return None
+
+def get_non_verified_user(db: Session, user_id: int) -> Sequence[Any] | None:
+    stmt = select(User).where(User.verified == False)
+    users = db.scalars(stmt).all()
+    if not users:
+        return None
+    return users
+
 
 def update_user(db: Session, user_name: str, new_user: User) -> type[User]:
     old_user = db.query(User).filter(User.name == user_name).first()

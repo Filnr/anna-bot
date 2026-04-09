@@ -18,8 +18,7 @@ def register_user(telegram_id: int, name: str) -> User:
                 new_user = User(
                     id=telegram_id,
                     name=name,
-                    role="Admin",  # Você pode mudar para "user" depois
-                    added_by=1
+                    role="user",  # Você pode mudar para "user" depois
                 )
                 return user_repositories.create_user(db, new_user)
 
@@ -42,3 +41,12 @@ def is_registered(telegram_id: int) -> bool:
         if not existing_user:
             return False
         return True
+
+def is_verified(telegram_id: int) -> bool:
+    with SessionLocal() as db:
+        user = user_repositories.get_user_by_id(db, telegram_id)
+        if user == None:
+            return False
+        elif user.verified:
+            return True
+        return False

@@ -4,21 +4,24 @@ from dotenv import load_dotenv
 import os
 import services.user_service
 from core.database import init_db
-
-init_db()
-
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import services.expenses_service
+
+from models import expenses
+from services.user_service import is_verified
+
+init_db()
 print('O bot esta iniciando...')
 
-# Encontra o arquivo .env na raiz do projeto
+# Carrega todos os .env / variaveis globais
 env_path = Path(__file__).parent.parent.parent.parent / '.env'
 load_dotenv(env_path)
-
 API_TOKEN: Final = os.getenv('BOT_TOKEN')
 BOT_HANDLE: Final = os.getenv('BOT_NAME')
 my_id: Final = os.getenv('ADMIN')
 user_service: Final = services.user_service
+expenses: Final = services.expenses_service
 
 # Command to start the bot
 async def initiate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -40,25 +43,23 @@ async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user = update.effective_user
     id = tg_user.id
-    is_registered = user_service.get_name(id)
-    user = user_service.get_name(id)
+    is_verified = user_service.is_verified(id)
     # Chama o backend de forma simples
-    if(is_registered):
-        await update.message.reply_text(f"Olá {user}, você ja está registrado!")
+    if(is_verified):
+        await update.message.reply_text(f"Olá {tg_user.full_name}, você ja está registrado!")
     else:
         user_service.register_user(id, tg_user.full_name)
-        await update.message.reply_text(f"Olá {user}, você foi registrado!")
+        await update.message.reply_text(f"Olá {tg_user.full_name}, você foi registrado!")
 
-def generate_response(id: int, username: str, user_input: str) -> str:
+def generate_response(id: int, username: str, user_input: str, update: Update) -> str:
     # Custom logic for response generation
     normalized_input: str = user_input.lower()
 
-    if 'hi' in normalized_input:
+    if 'Olá' in normalized_input:
         is_admin = id == int(my_id)
         if is_admin:
             return f'Olá {username}, meu lindo gostoso!'
         else:
-
             return f'Olá {username}!'
 
     if 'how are you doing' in normalized_input:
@@ -66,8 +67,15 @@ def generate_response(id: int, username: str, user_input: str) -> str:
 
     if 'i would like to subscribe' in normalized_input:
         return 'Sure go ahead!'
+    if 'registrar gastos' in normalized_input:
+        processar_registro_gasos(id, )
 
     return 'I didn’t catch that, could you please rephrase?'
+
+def processar_registro_gasos(user_id: int, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    hat_type: str = update.message.chat.type
+    text: str = update.message.text
+    
 
 
 async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,7 +95,7 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return  # Ignore messages where bot is not mentioned in a group
     else:
-        response: str = generate_response(tg_user.id, username, text)
+        response: str = generate_response(tg_user.id, username, text, update)
 
     # Reply to the user
     print('Bot response:', response)
