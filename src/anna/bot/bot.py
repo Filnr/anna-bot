@@ -7,123 +7,132 @@ from core.database import init_db
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import services.expenses_service
+import services.gemini_service as gemini_service
+from functools import wraps  # Importante: Biblioteca nativa do Python para criar o decorador
 
-from models import expenses
-from services.user_service import is_verified
-
-init_db()
-print('O bot esta iniciando...')
-
-# Carrega todos os .env / variaveis globais
 env_path = Path(__file__).parent.parent.parent.parent / '.env'
 load_dotenv(env_path)
+init_db()
+print('O bot está iniciando...')
+
+# Carrega variáveis globais
 API_TOKEN: Final = os.getenv('BOT_TOKEN')
 BOT_HANDLE: Final = os.getenv('BOT_NAME')
 my_id: Final = os.getenv('ADMIN')
 user_service: Final = services.user_service
-expenses: Final = services.expenses_service
-
-# Command to start the bot
-async def initiate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Fala meu chegado, como vai?')
 
 
-# Command to provide help information
-async def assist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Here comes the help')
+# ==========================================
+# 🛡️ DECORADOR DE SEGURANÇA (O "SEGURANÇA DA BALADA")
+# ==========================================
+def require_registration(func):
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        tg_user = update.effective_user
+
+        if not tg_user or tg_user.is_bot:
+            return  # Ignora mensagens vazias ou de outros bots
+
+        # Verifica no banco se o usuário é válido
+        if not user_service.is_verified(tg_user.id):
+            if update.message:
+                await update.message.reply_text(
+                    "Acesso negado! As Constelações não te reconhecem. Use /register primeiro.")
+            return  # Interrompe a função aqui. O usuário não faz mais nada.
+
+        # Se ele for válido, deixa a função original rodar
+        return await func(update, context, *args, **kwargs)
+
+    return wrapper
 
 
-# Command for custom functionality
-async def personalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('This is a custom command, you can put whatever you want here.')
+# ==========================================
+# COMANDOS DO BOT
+# ==========================================
 
-async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Sim mestre, estou funcionando perfeitamente')
-
+# O /register NÃO leva a tag @require_registration, pois a pessoa precisa dele para entrar
 async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user = update.effective_user
     id = tg_user.id
     is_verified = user_service.is_verified(id)
-    # Chama o backend de forma simples
-    if(is_verified):
-        await update.message.reply_text(f"Olá {tg_user.full_name}, você ja está registrado!")
+
+    if is_verified:
+        await update.message.reply_text(f"Olá {tg_user.full_name}, você já está registrado!")
     else:
         user_service.register_user(id, tg_user.full_name)
-        await update.message.reply_text(f"Olá {tg_user.full_name}, você foi registrado!")
-
-def generate_response(id: int, username: str, user_input: str, update: Update) -> str:
-    # Custom logic for response generation
-    normalized_input: str = user_input.lower()
-
-    if 'Olá' in normalized_input:
-        is_admin = id == int(my_id)
-        if is_admin:
-            return f'Olá {username}, meu lindo gostoso!'
-        else:
-            return f'Olá {username}!'
-
-    if 'how are you doing' in normalized_input:
-        return 'I am functioning properly!'
-
-    if 'i would like to subscribe' in normalized_input:
-        return 'Sure go ahead!'
-    if 'registrar gastos' in normalized_input:
-        processar_registro_gasos(id, )
-
-    return 'I didn’t catch that, could you please rephrase?'
-
-def processar_registro_gasos(user_id: int, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    hat_type: str = update.message.chat.type
-    text: str = update.message.text
-    
+        await update.message.reply_text(f"Olá {tg_user.full_name}, você foi registrado e validado no sistema!")
 
 
+# Daqui pra baixo, TUDO exige registro. Basta colocar o @require_registration em cima da função!
+
+@require_registration
+async def initiate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('Fala meu chegado, como vai?')
+
+
+@require_registration
+async def assist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('Here comes the help')
+
+
+@require_registration
+async def personalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('This is a custom command, you can put whatever you want here.')
+
+
+@require_registration
+async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('Sim mestre, estou funcionando perfeitamente')
+
+
+@require_registration
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    gemini_service.reset_chat(update.effective_user.id)
+    await update.message.reply_text("Memória da Han Sooyoung resetada. Cuidado, ela está de mau humor.")
+
+
+@require_registration
 async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user = update.effective_user
-    # Extract details of the incoming message
     chat_type: str = update.message.chat.type
     text: str = update.message.text
-    username = user_service.get_name(tg_user.id)
-    # Logging for troubleshooting
-    print(f'User ({update.message.chat.id}) in {chat_type}: "{text}"')
 
-    # Handle group messages only if bot is mentioned
-    if chat_type == 'group':
-        if BOT_HANDLE in text:
-            cleaned_text: str = text.replace(BOT_HANDLE, '').strip()
-            response: str = generate_response(cleaned_text)
-        else:
-            return  # Ignore messages where bot is not mentioned in a group
-    else:
-        response: str = generate_response(tg_user.id, username, text, update)
+    print(f'User ({tg_user.id}) in {chat_type}: "{text}"')
 
-    # Reply to the user
-    print('Bot response:', response)
+    # Trata mensagens em grupo (só responde se o bot for mencionado)
+    if chat_type in ['group', 'supergroup']:
+        if BOT_HANDLE not in text:
+            return
+        text = text.replace(BOT_HANDLE, '').strip()
+
+    # Como a função tem o @require_registration, se o código chegou nessa linha
+    # nós temos certeza absoluta que o usuário é validado!
+    response = gemini_service.chat(tg_user.id, text)
     await update.message.reply_text(response)
 
 
-# Log errors
+# Log de erros
 async def log_error(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f'Update {update} caused error {context.error}')
+    print(f'Erro gerado pelo update {update}: {context.error}')
 
 
-# Start the bot
+# ==========================================
+# INICIALIZAÇÃO DO BOT
+# ==========================================
 if __name__ == '__main__':
     app = Application.builder().token(API_TOKEN).build()
 
-    # Register command handlers
+    # Registra todos os comandos sem restrição na hora do start
+    # O bloqueio agora ocorre quando o usuário manda a mensagem!
     app.add_handler(CommandHandler('start', initiate_command))
     app.add_handler(CommandHandler('help', assist_command))
     app.add_handler(CommandHandler('custom', personalize_command))
     app.add_handler(CommandHandler('teste', teste))
     app.add_handler(CommandHandler('register', register_command))
+    app.add_handler(CommandHandler('reset', reset_command))
 
-    # Register message handler
     app.add_handler(MessageHandler(filters.TEXT, process_message))
-
-    # Register error handler
     app.add_error_handler(log_error)
 
     print('Starting polling...')
-    # Run the bot
     app.run_polling(poll_interval=2)
