@@ -20,3 +20,6 @@ SessionLocal = sessionmaker(bind=engine)
 def init_db():
     """Cria todas as tabelas baseado nos modelos"""
     Base.metadata.create_all(engine)
+
+def get_session():
+    return SessionLocal()

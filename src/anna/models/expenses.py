@@ -11,6 +11,6 @@ class Expenses(Base):
     type: Mapped[str] = Column(String)
     originType: Mapped[str] = Column(String)
     date: Mapped[datetime] = mapped_column(default=func.now())
-    recurrence_type: Mapped[str] = mapped_column(String(20), default="monthly")
+    recurrence_type: Mapped[str] = mapped_column(String(20), default="only-time")
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 

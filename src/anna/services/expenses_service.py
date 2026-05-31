@@ -1,18 +1,17 @@
 from core.database import SessionLocal, init_db
 from models.expenses import Expenses
-import repositories.expenses_repository
+from repositories.expenses_repository import ExpensesRepository
 
-db = SessionLocal()
-repositories = repositories.expenses_repository
+class ExpensesService:
+    def __init__(self, repository: ExpensesRepository) -> None:
+        self.repository = repository
 
-def register(value: float, type: str, otype: str, recurrence: str, user_id: int) -> Expenses:
-    expense = Expenses(
-        value=value,
-        type=type,
-        originType=otype,
-        recurrence_type=recurrence,
-        user_id=user_id
-    )
-    repositories.create(db, expense)
+        def register(self,expense: Expenses) -> None:
+            #Registra as despesas
+            self.repository.create(expense)
 
+        def read_month(self, user_id: int, month: int) -> Expenses:
+            return self.repository.read_month(user_id, month)
 
+        def update(self, expense: Expenses) -> None:
+            self.repository.update(expense)
