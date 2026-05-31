@@ -19,10 +19,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Substituir usuário para minúsculo
+        id: string
+        run: |
+          # Esse comando pega o nome do seu repositório completo (Filnr/anna-bot) e transforma tudo em minúsculo
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "repo_lower=${REPO_LOWER}" >> $GITHUB_OUTPUT
+
       - name: Buildar e Enviar Imagem Docker
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6  # Atualizado para v6 para evitar avisos de depreciação
         with:
           context: .
           push: true
-          # Isso vai gerar uma imagem com o seu usuário do github e o nome do repositório
-          tags: ghcr.io/${{ github.repository }}:latest
+          # Aqui usamos o resultado do passo anterior com letras estritamente minúsculas
+          tags: ghcr.io/${{ steps.string.outputs.repo_lower }}:latest
