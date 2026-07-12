@@ -1,0 +1,14 @@
+from datetime import datetime
+from sqlalchemy import ForeignKey, String, Float, func, Column
+from sqlalchemy.orm import Mapped, mapped_column
+from core.database import Base
+
+class Goal(Base):
+    __tablename__ = 'goal'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    userId: Mapped[int] = mapped_column(ForeignKey('user.id'))
+    name: Mapped[str] = mapped_column(String(50))
+    type: Mapped[str] = mapped_column(String(2), default="e")
+    value: Mapped[float] = mapped_column(Float)
+    period: Mapped[str] = mapped_column(String(20), default="Monthly")
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now())

@@ -38,7 +38,7 @@ def require_registration(func):
         if not user_service.is_verified(tg_user.id):
             if update.message:
                 await update.message.reply_text(
-                    "Acesso negado! As Constelações não te reconhecem. Use /register primeiro.")
+                    "Acesso negado! Se reistre primeiro. Use /register primeiro.")
             return  # Interrompe a função aqui. O usuário não faz mais nada.
 
         # Se ele for válido, deixa a função original rodar
@@ -61,7 +61,7 @@ async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Olá {tg_user.full_name}, você já está registrado!")
     else:
         user_service.register_user(id, tg_user.full_name)
-        await update.message.reply_text(f"Olá {tg_user.full_name}, você foi registrado e validado no sistema!")
+        await update.message.reply_text(f"Olá {tg_user.full_name}, você foi registrado!")
 
 
 # Daqui pra baixo, TUDO exige registro. Basta colocar o @require_registration em cima da função!
@@ -89,7 +89,7 @@ async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @require_registration
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gemini_service.reset_chat(update.effective_user.id)
-    await update.message.reply_text("Memória da Han Sooyoung resetada. Cuidado, ela está de mau humor.")
+    await update.message.reply_text("Memória resetada. Cuidado.")
 
 
 @require_registration
