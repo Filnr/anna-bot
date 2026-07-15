@@ -6,7 +6,7 @@ authors = [
     {name = "Filipe Nery",email = "fineryrabelo@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "python-telegram-bot (>=22.7,<23.0)",
     "pandas (>=3.0.2,<4.0.0)",

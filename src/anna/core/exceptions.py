@@ -9,3 +9,12 @@ class GoalDoesNotExistError(Exception):
 
 class GoalCantBeDeletedError(Exception):
     pass
+
+class IncomeAlreadyExistsError(Exception):
+    pass
+
+class IncomeDoesNotExistError(Exception):
+    pass
+
+class IncomeCantBeDeletedError(Exception):
+    pass

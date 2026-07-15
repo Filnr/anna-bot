@@ -35,6 +35,7 @@ class GoalRepository:
         try:
             self.session.commit()
             self.session.refresh(goal_old)
+            return goal_old
         except IntegrityError as e:
             self.session.rollback()
             raise GoalAlreadyExistsError("Goal violates a unique constraint") from e
@@ -42,7 +43,7 @@ class GoalRepository:
             self.session.rollback()
             raise DatabaseUnavailableError("Could not reach the database") from e
 
-        return goal_old
+
 
     def select_all(self, user_id: int):
         try:
@@ -64,6 +65,14 @@ class GoalRepository:
         except NoResultFound:
             raise GoalDoesNotExistError("Goal does not exist")
         return goal
+
+    def select_latest(self, user_id: int) -> Goal:
+        try:
+            goal = self.session.execute(select(Goal).where(Goal.userId == user_id)).scalars().one()
+        except NoResultFound:
+            raise GoalDoesNotExistError("There are no goals")
+        return goal
+
 
     def delete(self, user_id: int, goal_name: str) -> None:
         try:

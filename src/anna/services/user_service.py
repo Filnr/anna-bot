@@ -1,5 +1,4 @@
 from sqlalchemy import true
-
 from core.database import SessionLocal, init_db
 from models.user import User
 import repositories.user_repositories
