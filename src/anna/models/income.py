@@ -10,9 +10,9 @@ class Income(Base):
     name: Mapped[str] = mapped_column(String(100))
     value: Mapped[float] = mapped_column(default=0)
     origin: Mapped[str] = mapped_column(String(100))
-    date: Mapped[datetime] = mapped_column(default=func.now())
     recurrence_type: Mapped[str] = mapped_column(String(20), default="monthly")
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    date: Mapped[datetime] = mapped_column(server_default=func.now())
     
     __table_args__ = (
         UniqueConstraint("name", "user_id", name="uq_income_name_user"),

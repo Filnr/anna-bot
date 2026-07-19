@@ -18,3 +18,12 @@ class IncomeDoesNotExistError(Exception):
 
 class IncomeCantBeDeletedError(Exception):
     pass
+
+class ExpenseAlreadyExistsError(Exception):
+    pass
+
+class ExpenseDoesNotExistError(Exception):
+    pass
+
+class ExpenseCantBeDeletedError(Exception):
+    pass

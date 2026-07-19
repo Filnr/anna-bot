@@ -1,5 +1,5 @@
 from core.database import SessionLocal, init_db
-from models.expenses import Expenses
+from models.expense import Expenses
 from repositories.expenses_repository import ExpensesRepository
 
 class ExpensesService:

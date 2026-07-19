@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import datetime
 from core.database import SessionLocal
 from repositories.expenses_repository import ExpensesRepository
-from models.expenses import Expenses
+from models.expense import Expenses
 from schemas.
 
 env_path = Path(__file__).parent.parent.parent.parent / '.env'
