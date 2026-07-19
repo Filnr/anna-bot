@@ -1,4 +1,4 @@
-from services.expenses_service import ExpensesService
+from services.expense_service import ExpensesService
 from services.income_service import IncomeService
 from services.goal_service import GoalService
 from pathlib import Path
@@ -8,9 +8,8 @@ from google import genai
 from dotenv import load_dotenv
 import datetime
 from core.database import SessionLocal
-from repositories.expenses_repository import ExpensesRepository
-from models.expense import Expenses
-from schemas.
+from repositories.expense_repository import ExpensesRepository
+from schemas.expenses import expensesDTO
 
 env_path = Path(__file__).parent.parent.parent.parent / '.env'
 load_dotenv(env_path)

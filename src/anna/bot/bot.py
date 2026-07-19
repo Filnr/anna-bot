@@ -6,7 +6,7 @@ import services.user_service
 from core.database import init_db
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-import services.expenses_service
+import services.expense_service
 import services.gemini_service as gemini_service
 from functools import wraps  # Importante: Biblioteca nativa do Python para criar o decorador
 

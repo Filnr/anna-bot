@@ -19,8 +19,6 @@ class GoalRepository:
         except NoResultFound:
             raise GoalDoesNotExistError("Goal does not exist")
 
-
-
     def create(self, goal: Goal) -> Goal:
         try:
             self.session.add(goal)

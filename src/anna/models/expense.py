@@ -3,7 +3,7 @@ from sqlalchemy import ForeignKey, String, Float, func, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from core.database import Base
 
-class Expenses(Base):
+class Expense(Base):
     __tablename__ = 'expenses'
 
     id: Mapped[int] = mapped_column(primary_key=True)
