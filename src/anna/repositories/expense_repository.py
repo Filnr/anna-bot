@@ -41,7 +41,7 @@ class ExpensesRepository:
             raise DatabaseUnavailableError("Could not connect to the database") from e
 
     def select_by_month(self, user_id: int, month: int, year: int) -> Sequence[Expense]:
-        if year is None:
+        if year is 0:
             year = datetime.datetime.now().year
         try:
             expenses = self.session.execute(
@@ -58,8 +58,7 @@ class ExpensesRepository:
         except OperationalError as e:
             raise DatabaseUnavailableError("Could not connect to the database") from e
 
-
-    def select_last_month_by_type(self, user_id: int, category: str) -> Sequence[Expense]:
+    def select_last_month_by_category(self, user_id: int, category: str) -> Sequence[Expense]:
         last_month = datetime.datetime.now() - relativedelta(months=1)
         try:
             expenses = self.session.execute(
@@ -106,6 +105,7 @@ class ExpensesRepository:
         old_expense.installment = new_expense.installment
         old_expense.name = new_expense.name
         old_expense.total_installment = new_expense.total_installment
+        old_expense.recurrence_type = new_expense.recurrence_type
 
         try:
             self.session.commit()

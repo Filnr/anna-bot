@@ -13,5 +13,6 @@ class Expense(Base):
     date: Mapped[datetime] = mapped_column()
     installment: Mapped[int] = mapped_column(Integer, default=1)
     total_installment: Mapped[int] = mapped_column(Integer, default=1)
+    recurrence_type: Mapped[str] = mapped_column(String, default="only-time")
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

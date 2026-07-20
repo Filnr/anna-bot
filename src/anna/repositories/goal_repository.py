@@ -87,7 +87,6 @@ class GoalRepository:
 
         return self._commit_update(goal)
 
-
     def _commit_update(self, goal: Goal) -> Goal:
         try:
             self.session.commit()
