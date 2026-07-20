@@ -27,3 +27,6 @@ class ExpenseDoesNotExistError(Exception):
 
 class ExpenseCantBeDeletedError(Exception):
     pass
+
+class ExpenseCreationError(Exception):
+    pass

@@ -1,9 +1,9 @@
 import datetime
-from typing import Sequence
+from typing import Sequence, List
 from sqlalchemy import select, extract
 from sqlalchemy.exc import IntegrityError, OperationalError
 from core.exceptions import ExpenseAlreadyExistsError, ExpenseDoesNotExistError, ExpenseCantBeDeletedError, \
-    DatabaseUnavailableError
+    DatabaseUnavailableError, ExpenseCreationError
 from models.expense import Expense
 from sqlalchemy.orm import Session
 from dateutil.relativedelta import relativedelta
@@ -40,8 +40,27 @@ class ExpensesRepository:
         except OperationalError as e:
             raise DatabaseUnavailableError("Could not connect to the database") from e
 
-    def select_by_month(self, user_id: int, month: int, year: int) -> Sequence[Expense]:
-        if year is 0:
+    def _commit_and_refresh_many(self, expenses: List[Expense]) -> List[Expense]:
+        try:
+            self.session.commit()
+        except IntegrityError as e:
+            self.session.rollback()
+            raise ExpenseCreationError("One or more expenses violate a constraint") from e
+        except OperationalError as e:
+            self.session.rollback()
+            raise DatabaseUnavailableError("Could not reach the database") from e
+
+        for expense in expenses:
+            self.session.refresh(expense)
+
+        return expenses
+
+    def create_many(self, expenses: List[Expense])-> Sequence[Expense]:
+        self.session.add_all(expenses)
+        return self._commit_and_refresh_many(expenses)
+
+    def select_by_month(self, user_id: int, month: int, year: int | None = None) -> Sequence[Expense]:
+        if year is None:
             year = datetime.datetime.now().year
         try:
             expenses = self.session.execute(
@@ -99,7 +118,6 @@ class ExpensesRepository:
     def update(self, user_id: int, expense_id: int, new_expense: Expense) -> Expense:
         old_expense = self._get_expenses_by_id(user_id, expense_id)
 
-        old_expense.date = new_expense.date
         old_expense.category = new_expense.category
         old_expense.value = new_expense.value
         old_expense.installment = new_expense.installment

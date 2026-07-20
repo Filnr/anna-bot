@@ -19,8 +19,16 @@ class GoalService:
         )
         return self.repository.create(goal)
 
-    def update(self, userId: int, old_name_goal: str,goal: GoalDTO) -> Goal:
-        return self.repository.update(userId, old_name_goal, goal)
+    def update(self, user_id: int, old_name_goal: str,goal: GoalDTO) -> Goal:
+        goal = Goal(
+            name=old_name_goal,
+            userId=user_id,
+            type=goal.type,
+            value=goal.value,
+            period=goal.period,
+            accumulated_value=goal.accumulated_value,
+        )
+        return self.repository.update(user_id, old_name_goal, goal)
 
     def delete(self, userId: int, goal_name: str) -> None:
         return self.repository.delete(userId, goal_name)
