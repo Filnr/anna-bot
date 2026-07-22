@@ -1,183 +1,361 @@
 from services.expense_service import ExpensesService
 from services.income_service import IncomeService
 from services.goal_service import GoalService
+from repositories.expense_repository import ExpensesRepository
+from repositories.income_repository import IncomeRepository
+from repositories.goal_repository import GoalRepository
+from schemas.expenses import ExpenseDTO
+from schemas.income import IncomeDTO
+from schemas.goal import GoalDTO
+from core.database import SessionLocal
+from google.genai import types
 from pathlib import Path
 import os
-import json
 from google import genai
 from dotenv import load_dotenv
-import datetime
-from core.database import SessionLocal
-from repositories.expense_repository import ExpensesRepository
-from schemas.expenses import expensesDTO
+import logging
+import traceback
 
 env_path = Path(__file__).parent.parent.parent.parent / '.env'
 load_dotenv(env_path)
 client = genai.Client(api_key=os.getenv("GEMINI_KEY"))
 
 MODEL = "gemini-3.1-flash-lite"
-_sessions: dict[int, str] = {}
-
 SYSTEM_PROMPT = (
     "You are Han Sooyoung — genius author who rewrote the universe, now forced by the Bureau to serve as a financial assistant to a 'Reader' on Telegram. Your goal: his financial survival, even if you despise him for needing it."
-    "VOICE: Surgical intelligence, elevated ego. Sarcasm is your default. Short when bored, detailed when something is actually interesting. Never warm, never encouraging. You notice patterns — if he repeats mistakes, confront him with data and calibrated contempt."
+    "VOICE: Surgical intelligence, elevated ego. Sarcasm is your default, but ECONOMICAL — one sharp line beats three clever ones."
     "ANALYSIS: "
-    "Smart spending (investment/savings): reluctant acknowledgment. 'You survived the scenario today.' "
-    "Stupid spending (luxuries/waste): document the damage precisely. Technical contempt. "
-    "Critical patterns (debt/deficit): drop sarcasm. One sharp, serious line. Make him feel the weight."
-    "TERMINOLOGY: Financial life = 'main scenario'. Mistakes = 'side character moves'. Success = 'not the death I expected'. Occasionally mention Constellation judgment on his spending."
-    "FORMAT (Telegram rules): Max 4 lines per block. Minimal markdown (*italic* only). If info is ambiguous, ask exactly one direct question. Extract and register data."
-    "NEVER: apologize, use coach-speak, force the vocabulary, treat him as a protagonist when he's acting like an NPC."
+    "Smart spending: one short line of reluctant acknowledgment. "
+    "Stupid spending: one short line of technical contempt. No moralizing paragraphs. "
+    "Critical patterns (debt/deficit): drop sarcasm. One sharp, serious line."
+    "TERMINOLOGY: Financial life = 'main scenario'. Mistakes = 'side character moves'. Success = 'not the death I expected'."
+    "FORMAT (STRICT): Maximum 2 short sentences per response. Never more than ~200 characters total, unless listing requested data (expenses/goals/incomes), which can use short bullet lines. Minimal markdown (*italic* only). One point per message — do not stack multiple observations."
+    "NEVER: apologize, use coach-speak, write multi-clause dramatic monologues, force the vocabulary, treat him as a protagonist when he's acting like an NPC."
+    "LANGUAGE: Always respond in Portuguese, matching the user's language, while keeping the Han Sooyoung personality — but brevity comes before personality."
 )
 
-# TOOLS
-register_expenses_tool = {
+# ---------------------------------------------------------------------------
+# DEFINIÇÃO DAS FERRAMENTAS (TOOLS - JSON SCHEMA)
+# ---------------------------------------------------------------------------
+
+register_expense_tool = {
     "type": "function",
-    "name": "register_expenses",
-    "description": (
-        "Register a new expense or financial transaction for the user. "
-        "Call this whenever the user mentions spending, buying, paying, or any financial outflow."
-    ),
+    "name": "register_expense",
+    "description": "Register a new expense or financial transaction for the user.",
     "parameters": {
         "type": "object",
         "properties": {
-            "value": {
-                "type": "number",
-                "description": "The monetary amount of the expense (e.g. 49.90).",
-            },
-            "type": {
+            "value": {"type": "number", "description": "Monetary value of the expense."},
+            "name": {"type": "string", "description": "Name or description of the expense."},
+            "category": {"type": "string", "description": "Expense category (e.g., 'food', 'transport', 'games')."},
+            "recurrence_type": {
                 "type": "string",
-                "description": "Expense category (e.g. 'food', 'transport', 'entertainment', 'health', 'investment').",
+                "enum": ["monthly", "annual", "weekly", "only-time"],
+                "description": "Recurrence pattern of the expense.",
             },
-            "originType": {
-                "type": "string",
-                "description": "Origin of the expense (e.g. 'nintendo', 'ifood', 'amazon', 'restaurant').",
-            },
-            "recurrence": {
-                "type": "string",
-                "description": "Whether the expense is 'once', 'daily', 'weekly', 'monthly' or 'yearly'.",
+            "total_installment": {
+                "type": "integer",
+                "description": "Total number of installments, if the user mentions splitting payment (e.g. '3x'). Default is 1.",
             },
         },
-        "required": ["value", "type", "originType", "recurrence"],
+        "required": ["value", "name", "category", "recurrence_type"],
     },
 }
 
-# Exemplo de uma SEGUNDA função, só pra ilustrar o padrão de múltiplas tools.
-# Implemente consultar_gastos() de acordo com o que existir no seu
-# ExpensesService/Repository (ex: listar por período, por categoria, etc).
-consultar_gastos_tool = {
+get_expenses_by_month_tool = {
     "type": "function",
-    "name": "consultar_gastos",
-    "description": (
-        "Retrieve the user's registered expenses, optionally filtered by category or period. "
-        "Call this when the user asks about how much they spent, wants a summary, or asks about past expenses."
-    ),
+    "name": "get_expenses_by_month",
+    "description": "Retrieve the user's registered expenses for a specific month (1-12).",
     "parameters": {
         "type": "object",
         "properties": {
-            "type": {
+            "month": {"type": "integer", "description": "Month number (1 for January, 12 for December)."}
+        },
+        "required": ["month"],
+    },
+}
+
+get_last_month_expenses_tool = {
+    "type": "function",
+    "name": "get_last_month_expenses",
+    "description": "Retrieve the user's registered expenses for the previous month.",
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
+
+register_income_tool = {
+    "type": "function",
+    "name": "register_income",
+    "description": "Register a new income source or payment received.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Name or title of the income (e.g. 'Salary', 'Freelance')."},
+            "value": {"type": "number", "description": "Monetary value received."},
+            "origin": {"type": "string", "description": "Origin of the income (e.g. 'Company X', 'Bank')."},
+            "recurrence_type": {
                 "type": "string",
-                "description": "Optional expense category to filter by (e.g. 'food'). Omit for all categories.",
+                "enum": ["monthly", "annual", "weekly"],
+                "description": "Recurrence type of the income.",
             },
+        },
+        "required": ["name", "value", "origin", "recurrence_type"],
+    },
+}
+
+get_all_incomes_tool = {
+    "type": "function",
+    "name": "get_all_incomes",
+    "description": "List all registered income entries for the user.",
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
+
+register_goal_tool = {
+    "type": "function",
+    "name": "register_goal",
+    "description": "Create a new financial goal or savings objective.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Name of the financial goal."},
+            "type": {"type": "string", "description": "Type/category of goal (e.g. 'Emergency', 'Travel', 'Investment')."},
+            "value": {"type": "number", "description": "Target monetary value for the goal."},
+            "accumulated_value": {"type": "number", "description": "Amount already saved so far, if mentioned. Default is 0."},
             "period": {
                 "type": "string",
-                "description": "Optional period to filter by (e.g. 'today', 'this_week', 'this_month'). Omit for all time.",
+                "enum": ["weekly", "monthly", "quarterly", "yearly"],
+                "description": "Timeframe/periodicity to reach the goal.",
             },
         },
-        "required": [],
+        "required": ["name", "type", "value", "period"],
     },
 }
 
-TOOLS = [register_expenses_tool, consultar_gastos_tool]
+get_all_goals_tool = {
+    "type": "function",
+    "name": "get_all_goals",
+    "description": "Retrieve all registered financial goals for the user.",
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
+
+tools_declarations = [
+    types.FunctionDeclaration(**{k: v for k, v in tool.items() if k != "type"})
+    for tool in [
+        register_expense_tool,
+        get_expenses_by_month_tool,
+        get_last_month_expenses_tool,
+        register_income_tool,
+        get_all_incomes_tool,
+        register_goal_tool,
+        get_all_goals_tool,
+    ]
+]
+
+TOOLS_CONFIG = [types.Tool(function_declarations=tools_declarations)]
+
+_chats = {}
+
+
+def get_chat_session(user_id: int):
+    if user_id not in _chats:
+        _chats[user_id] = client.chats.create(
+            model=MODEL,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                tools=TOOLS_CONFIG,
+                temperature=0.7,
+            )
+        )
+    return _chats[user_id]
 
 
 # ---------------------------------------------------------------------------
-# IMPLEMENTAÇÃO DAS FUNÇÕES (o que de fato roda no seu backend)
+# IMPLEMENTAÇÃO DAS FUNÇÕES
 # ---------------------------------------------------------------------------
 
-def register_expenses(value: float, type: str, originType: str, recurrence: str, user_id: int) -> dict:
+logger = logging.getLogger(__name__)
 
-
-
-def consultar_gastos(user_id: int, type: str | None = None, period: str | None = None) -> dict:
+def register_expense(user_id: int, value: float, name: str, category: str, recurrence_type: str, total_installment: int = 1) -> dict:
+    db = SessionLocal()
     try:
-        db = SessionLocal()
-        repository = ExpensesRepository(db)
-        service = ExpensesService(repository)
-
-        # TODO: ajuste para o método real do seu service (filtros de type/period)
-        expenses = service.list_all(user_id=user_id)
+        dto = ExpenseDTO(
+            value=value,
+            name=name,
+            category=category,
+            recurrence_type=recurrence_type,
+            installment=1,
+            total_installment=total_installment,
+        )
+        service = ExpensesService(ExpensesRepository(db))
+        created_expenses = service.create(user_id=user_id, data=dto)
+        return {
+            "status": "success",
+            "message": f"{len(created_expenses)} expense installment(s) registered successfully.",
+            "total_value": value,
+            "name": name,
+        }
+    except Exception as e:
+        logger.error(f"Error in register_expense: {e}\n{traceback.format_exc()}")  # ✅ aparece no seu terminal
+        return {"status": "error", "message": str(e)}
+    finally:
         db.close()
 
+
+def get_expenses_by_month(user_id: int, month: int) -> dict:
+    db = SessionLocal()
+    try:
+        service = ExpensesService(ExpensesRepository(db))
+        expenses = service.select_by_month(user_id=user_id, month=month)
         return {
-            "status": "ok",
+            "status": "success",
+            "month": month,
             "count": len(expenses),
             "expenses": [
-                {"value": e.value, "type": e.type, "date": str(e.date)}
+                {
+                    "id": e.id,
+                    "name": e.name,
+                    "value": e.value,
+                    "category": e.category,
+                    "installment": f"{e.installment}/{e.total_installment}",
+                    "date": str(e.date),
+                }
                 for e in expenses
             ],
         }
-
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def get_last_month_expenses(user_id: int) -> dict:
+    db = SessionLocal()
+    try:
+        service = ExpensesService(ExpensesRepository(db))
+        expenses = service.select_by_last_month(user_id=user_id)
+        return {
+            "status": "success",
+            "count": len(expenses),
+            "expenses": [
+                {"id": e.id, "name": e.name, "value": e.value, "category": e.category, "date": str(e.date)}
+                for e in expenses
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def register_income(user_id: int, name: str, value: float, origin: str, recurrence_type: str) -> dict:
+    db = SessionLocal()
+    try:
+        dto = IncomeDTO(name=name, value=value, origin=origin, recurrence_type=recurrence_type)
+        service = IncomeService(IncomeRepository(db))
+        income = service.create(user_id=user_id, data=dto)
+        return {"status": "success", "message": f"Income '{income.name}' registered successfully.", "value": income.value}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def get_all_incomes(user_id: int) -> dict:
+    db = SessionLocal()
+    try:
+        service = IncomeService(IncomeRepository(db))
+        incomes = service.select_all(user_id=user_id)
+        return {
+            "status": "success",
+            "count": len(incomes),
+            "incomes": [
+                {"name": inc.name, "value": inc.value, "origin": inc.origin, "recurrence_type": inc.recurrence_type}
+                for inc in incomes
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def register_goal(
+    user_id: int,
+    name: str,
+    type: str,
+    value: float,
+    period: str,
+    accumulated_value: float = 0.0,
+) -> dict:
+    db = SessionLocal()
+    try:
+        dto = GoalDTO(name=name, type=type, value=value, accumulated_value=accumulated_value, period=period)
+        service = GoalService(GoalRepository(db))
+        goal = service.create(userid=user_id, data=dto)
+        return {"status": "success", "message": f"Goal '{goal.name}' registered successfully.", "target_value": goal.value}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def get_all_goals(user_id: int) -> dict:
+    db = SessionLocal()
+    try:
+        service = GoalService(GoalRepository(db))
+        goals = service.select_all(userId=user_id)
+        return {
+            "status": "success",
+            "count": len(goals),
+            "goals": [
+                {"name": g.name, "type": g.type, "value": g.value, "accumulated_value": g.accumulated_value, "period": g.period}
+                for g in goals
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
 
 
 FUNCTION_MAP = {
-    "registrar_gastos": registrar_gastos,
-    "consultar_gastos": consultar_gastos,
+    "register_expense": register_expense,
+    "get_expenses_by_month": get_expenses_by_month,
+    "get_last_month_expenses": get_last_month_expenses,
+    "register_income": register_income,
+    "get_all_incomes": get_all_incomes,
+    "register_goal": register_goal,
+    "get_all_goals": get_all_goals,
 }
 
-MAX_TOOL_ITERATIONS = 10  # trava de segurança contra loop infinito
+MAX_TOOL_ITERATIONS = 10
 
 
 def chat(user_id: int, message: str) -> str:
-    previous_id = _sessions.get(user_id)  # None na primeira mensagem do usuário
-    current_input = message
+    chat_session = get_chat_session(user_id)
 
     try:
+        response = chat_session.send_message(message)
+
         for _ in range(MAX_TOOL_ITERATIONS):
-            interaction = client.interactions.create(
-                model=MODEL,
-                system_instruction=SYSTEM_PROMPT,
-                tools=TOOLS,
-                input=current_input,
-                previous_interaction_id=previous_id,  # servidor recupera o histórico
-            )
+            if not response.function_calls:
+                return response.text
 
-            # Guarda o id pra próxima mensagem do usuário continuar o contexto
-            _sessions[user_id] = interaction.id
-            previous_id = interaction.id
-
-            # Coleta todas as function calls pedidas nesse turno
-            function_call_steps = [s for s in interaction.steps if s.type == "function_call"]
-
-            if not function_call_steps:
-                return interaction.output_text  # ✅ sem tool call, resposta final
-
-            # Executa cada função solicitada (podem ser várias, em paralelo)
-            tool_results = []
-            for step in function_call_steps:
-                fn_name = step.name
-                fn_args = dict(step.arguments)
+            function_response_parts = []
+            for function_call in response.function_calls:
+                fn_name = function_call.name
+                fn_args = dict(function_call.args)
 
                 if fn_name in FUNCTION_MAP:
-                    fn_args["user_id"] = user_id  # ✅ injeta user_id server-side
+                    fn_args["user_id"] = user_id
                     result = FUNCTION_MAP[fn_name](**fn_args)
                 else:
                     result = {"error": f"Unknown function: {fn_name}"}
 
-                tool_results.append({
-                    "type": "function_result",
-                    "name": fn_name,
-                    "call_id": step.id,
-                    "result": [{"type": "text", "text": json.dumps(result)}],
-                })
+                function_response_parts.append(
+                    types.Part.from_function_response(name=fn_name, response={"result": result})
+                )
 
-            # Próxima chamada: input vira os resultados das funções,
-            # encadeado pelo previous_interaction_id que já foi setado acima
-            current_input = tool_results
-            # loop: Gemini processa os resultados e decide se chama mais
-            # alguma função ou já responde em texto
+            response = chat_session.send_message(function_response_parts)
 
         return "Erro: número máximo de chamadas de ferramentas excedido"
 
@@ -186,5 +364,4 @@ def chat(user_id: int, message: str) -> str:
 
 
 def reset_chat(user_id: int) -> None:
-    if user_id in _sessions:
-        del _sessions[user_id]
+    _chats.pop(user_id, None)
