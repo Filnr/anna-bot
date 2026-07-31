@@ -37,7 +37,7 @@ class GoalRepository:
 
         goal_old.name = goal.name
         goal_old.type = goal.type
-        goal_old.value = goal.value
+        goal_old.target_value = goal.target_value
         goal_old.period = goal.period
         return self._commit_update(goal_old)
 
@@ -67,12 +67,13 @@ class GoalRepository:
         return goal
 
 
-    def delete(self, user_id: int, goal_name: str) -> None:
+    def delete(self, user_id: int, goal_name: str) -> bool:
         goal = self._get_goal_by_name(user_id, goal_name)
 
         try:
             self.session.delete(goal)
             self.session.commit()
+            return True
         except IntegrityError as e:
             self.session.rollback()
             raise GoalCantBeDeletedError("Goal cannot be deleted because it has related records") from e

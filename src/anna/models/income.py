@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy import ForeignKey, String, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from core.database import Base
+from models.user import User
 
 class Income(Base):
     __tablename__ = "incomes"

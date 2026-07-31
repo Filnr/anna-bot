@@ -8,12 +8,22 @@ class IncomeService:
     def __init__(self, repository: IncomeRepository):
         self.repository = repository
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self) -> None:
+        self.repository.session.close()
+
     def create(self, user_id: int, data: IncomeDTO) -> Income:
         income = Income(
             name=data.name,
             value=data.value,
             origin=data.origin,
-            recurrence_type=data.recurrence_type
+            recurrence_type=data.recurrence_type,
+            user_id=user_id
         )
         return self.repository.create(user_id, income)
 

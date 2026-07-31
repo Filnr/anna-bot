@@ -21,8 +21,6 @@ BOT_HANDLE: Final = os.getenv('BOT_NAME')
 my_id: Final = os.getenv('ADMIN')
 user_service: Final = services.user_service
 
-init_db()
-
 # ==========================================
 # 🛡️ DECORADOR DE SEGURANÇA
 # ==========================================

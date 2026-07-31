@@ -29,7 +29,7 @@ class IncomeRepository:
             raise IncomeDoesNotExistError("Income does not exist") from e
 
         income.name = new_income.name
-        income.value = new_income.value
+        income.target_value = new_income.value
         income.origin = new_income.origin
         income.recurrence_type = new_income.recurrence_type
 

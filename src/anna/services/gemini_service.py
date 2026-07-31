@@ -291,7 +291,7 @@ def register_goal(
         dto = GoalDTO(name=name, type=type, value=value, accumulated_value=accumulated_value, period=period)
         service = GoalService(GoalRepository(db))
         goal = service.create(userid=user_id, data=dto)
-        return {"status": "success", "message": f"Goal '{goal.name}' registered successfully.", "target_value": goal.value}
+        return {"status": "success", "message": f"Goal '{goal.name}' registered successfully.", "target_value": goal.target_value}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:
@@ -307,7 +307,7 @@ def get_all_goals(user_id: int) -> dict:
             "status": "success",
             "count": len(goals),
             "goals": [
-                {"name": g.name, "type": g.type, "value": g.value, "accumulated_value": g.accumulated_value, "period": g.period}
+                {"name": g.name, "type": g.type, "value": g.target_value, "accumulated_value": g.accumulated_value, "period": g.period}
                 for g in goals
             ],
         }

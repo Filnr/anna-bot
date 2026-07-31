@@ -4,14 +4,28 @@ from dateutil.relativedelta import relativedelta
 from models.expense import Expense
 from repositories.expense_repository import ExpensesRepository
 from schemas.expenses import ExpenseDTO
+from core.database import SessionLocal
+
 
 class ExpensesService:
     def __init__(self, repository: ExpensesRepository) -> None:
         self.repository = repository
 
-    def create(self, user_id: int, data: ExpenseDTO) -> List[Expense]:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self) -> None:
+        self.repository.session.close()
+
+    def create(self, user_id: int, data: ExpenseDTO) -> Sequence[Expense]:
         date_now = datetime.now()
         installment_value = round(data.value / data.total_installment, 2)
+        # Impede que caso a despesa tenha sido parcelada, seja listada como recorrente
+        if data.total_installment > 1:
+            data.recurrence_type = "only-time"
 
         expenses = [
             Expense(
@@ -26,7 +40,6 @@ class ExpensesService:
             )
             for i in range(data.total_installment)
         ]
-
         return self.repository.create_many(expenses)
 
     def update(self, user_id: int, expense_id: int, data: ExpenseDTO) -> Expense:

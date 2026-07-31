@@ -9,6 +9,15 @@ class GoalService:
     def __init__(self, repository: GoalRepository):
         self.repository = repository
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self) -> None:
+        self.repository.session.close()
+
     def create(self, userid: int, data: GoalDTO) -> Goal:
         goal = Goal(
             name=data.name,
@@ -30,7 +39,7 @@ class GoalService:
         )
         return self.repository.update(user_id, old_name_goal, goal)
 
-    def delete(self, userId: int, goal_name: str) -> None:
+    def delete(self, userId: int, goal_name: str) -> bool:
         return self.repository.delete(userId, goal_name)
 
     def select_all(self, userId: int) -> list[Goal]:
