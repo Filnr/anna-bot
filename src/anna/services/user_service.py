@@ -1,51 +1,55 @@
 from sqlalchemy import true
+from sqlalchemy.exc import NoResultFound
+
 from core.database import SessionLocal, init_db
 from models.user import User
-import repositories.user_repositories
+from repositories.user_repositories import UserRepository
+from schemas.user import UserCreateDTO
+from core.exceptions import UserDoesNotExistError
 
-db = SessionLocal()
-user_repositories = repositories.user_repositories
 
-def register_user(telegram_id: int, name: str) -> User:
-    # Cria uma sessão nova apenas para esta operação
-    with SessionLocal() as db:
+class UserService:
+    def __init__(self, repository: UserRepository) -> None:
+        self.repository = repository
+
+    def __enter__(self):
+        return self
+
+    def close(self) -> None:
+        self.repository.session.close()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+
+    def create(self, data: UserCreateDTO) -> User:
+        user = User(
+            telegram_id=data.telegram_id,
+            name=data.name,
+        )
+        return self.repository.create(user)
+
+    # Function responsible for usability
+    def has_access(self, telegram_id: int) -> bool:
+        user = self.repository.select_by_id(telegram_id)
+        return user.free_access
+
+    def find_by_name(self, telegram_id: int) -> str:
+        user = self.repository.select_by_id(telegram_id)
+        return user.name
+
+    def is_registered(self, telegram_id: int) -> bool:
         try:
-            # Verifica se o ID já existe
-            existing_user = user_repositories.get_user_by_id(db, telegram_id)
-
-            if not existing_user:
-                new_user = User(
-                    id=telegram_id,
-                    name=name,
-                    role="user",  # Você pode mudar para "user" depois
-                )
-                return user_repositories.create_user(db, new_user)
-
-            return existing_user
-        except Exception as e:
-            db.rollback()  # Desfaz qualquer erro para não travar o banco
-            print(f"Erro ao registrar usuário: {e}")
-            raise e
-
-def get_name(telegram_id: int) -> str:
-    with SessionLocal() as db:
-        existing_user = user_repositories.get_user_by_id(db, telegram_id)
-        if not existing_user:
-            return "Nenhum User"
-        return existing_user.name
-
-def is_registered(telegram_id: int) -> bool:
-    with SessionLocal() as db:
-        existing_user = user_repositories.get_user_by_id(db, telegram_id)
-        if not existing_user:
-            return False
-        return True
-
-def is_verified(telegram_id: int) -> bool:
-    with SessionLocal() as db:
-        user = user_repositories.get_user_by_id(db, telegram_id)
-        if user == None:
-            return False
-        elif user.verified:
+            self.repository.select_by_id(telegram_id)
             return True
-        return False
+        except UserDoesNotExistError:
+            return False
+
+    def find_by_telegram_id(self, telegram_id: int) -> User:
+        return self.repository.select_by_id(telegram_id)
+
+
+def get_user_service() -> UserService:
+    session = SessionLocal()
+    repository = UserRepository(session)
+    return UserService(repository)

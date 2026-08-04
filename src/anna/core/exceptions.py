@@ -30,3 +30,24 @@ class ExpenseCantBeDeletedError(Exception):
 
 class ExpenseCreationError(Exception):
     pass
+
+class UserAlreadyExistsError(Exception):
+    pass
+
+class UserDoesNotExistError(Exception):
+    pass
+
+class UserCantBeDeletedError(Exception):
+    pass
+
+class UserCreationError(Exception):
+    pass
+
+class SubscriptionAlreadyExistsError(Exception):
+    pass
+
+class SubscriptionDoesNotExistError(Exception):
+    pass
+
+class SubscriptionCantBeDeletedError(Exception):
+    pass

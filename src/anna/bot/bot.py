@@ -9,6 +9,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import services.expense_service
 import services.gemini_service as gemini_service
 from functools import wraps  # Importante: Biblioteca nativa do Python para criar o decorador
+from services.user_service import UserService, get_user_service
+from schemas.user import UserCreateDTO
 
 env_path = Path(__file__).parent.parent.parent.parent / '.env'
 load_dotenv(env_path)
@@ -19,7 +21,6 @@ print('O bot está iniciando...')
 API_TOKEN: Final = os.getenv('BOT_TOKEN')
 BOT_HANDLE: Final = os.getenv('BOT_NAME')
 my_id: Final = os.getenv('ADMIN')
-user_service: Final = services.user_service
 
 # ==========================================
 # 🛡️ DECORADOR DE SEGURANÇA
@@ -32,8 +33,11 @@ def require_registration(func):
         if not tg_user or tg_user.is_bot:
             return  # Ignora mensagens vazias ou de outros bots
 
+        with get_user_service() as user_service:
+            registered_user = user_service.is_registered(tg_user.id)
+
         # Verifica no banco se o usuário é válido
-        if not user_service.is_verified(tg_user.id):
+        if not registered_user:
             if update.message:
                 await update.message.reply_text(
                     "Acesso negado! Se reistre primeiro. Use /register primeiro.")
@@ -52,15 +56,17 @@ def require_registration(func):
 # O /register NÃO leva a tag @require_registration, pois a pessoa precisa dele para entrar
 async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user = update.effective_user
-    id = tg_user.id
-    is_verified = user_service.is_verified(id)
 
-    if is_verified:
-        await update.message.reply_text(f"Olá {tg_user.full_name}, você já está registrado!")
-    else:
-        user_service.register_user(id, tg_user.full_name)
-        await update.message.reply_text(f"Olá {tg_user.full_name}, você foi registrado!")
-
+    with get_user_service() as user_service:
+        if user_service.is_registered(tg_user.id):
+            await update.message.reply_text(f"Olá {tg_user.full_name}, você já está registrado!")
+        else:
+            user = UserCreateDTO(
+                telegram_id=tg_user.id,
+                name=tg_user.name
+            )
+            user_service.create(user)
+            await update.message.reply_text(f"Olá {tg_user.full_name}, você foi registrado!")
 
 # Daqui pra baixo, TUDO exige registro. Basta colocar o @require_registration em cima da função!
 
@@ -103,10 +109,13 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if BOT_HANDLE not in text:
             return
         text = text.replace(BOT_HANDLE, '').strip()
+    with get_user_service() as user_service:
+        user = user_service.find_by_telegram_id(tg_user.id)
+        user_id = user.id
 
     # Como a função tem o @require_registration, se o código chegou nessa linha
     # nós temos certeza absoluta que o usuário é validado!
-    response = gemini_service.chat(tg_user.id, text)
+    response = gemini_service.chat(user_id, text)
     await update.message.reply_text(response)
 
 

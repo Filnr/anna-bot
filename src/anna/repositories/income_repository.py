@@ -9,7 +9,7 @@ class IncomeRepository:
     def __init__(self, session: Session):
         self.session: Session = session
 
-    def create(self, user_id: int, income: Income) -> Income:
+    def create(self , income: Income) -> Income:
        try:
            self.session.add(income)
            self.session.commit()

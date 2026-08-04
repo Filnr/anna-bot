@@ -12,7 +12,7 @@ class Income(Base):
     value: Mapped[float] = mapped_column(default=0)
     origin: Mapped[str] = mapped_column(String(100))
     recurrence_type: Mapped[str] = mapped_column(String(20), default="monthly")
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
     date: Mapped[datetime] = mapped_column(server_default=func.now())
     
     __table_args__ = (

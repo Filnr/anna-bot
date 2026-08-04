@@ -1,11 +1,9 @@
 from datetime import datetime
-from typing import List, Sequence
+from typing import Sequence
 from dateutil.relativedelta import relativedelta
 from models.expense import Expense
 from repositories.expense_repository import ExpensesRepository
 from schemas.expenses import ExpenseDTO
-from core.database import SessionLocal
-
 
 class ExpensesService:
     def __init__(self, repository: ExpensesRepository) -> None:

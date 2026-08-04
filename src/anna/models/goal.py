@@ -6,7 +6,7 @@ from core.database import Base
 class Goal(Base):
     __tablename__ = 'goal'
     id: Mapped[int] = mapped_column(primary_key=True)
-    userId: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    userId: Mapped[int] = mapped_column(ForeignKey('user.id'))
 
     name: Mapped[str] = mapped_column(String(50))
     type: Mapped[str] = mapped_column(String(2), default="e") # e = Economizar, C = comprar
