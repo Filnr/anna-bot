@@ -18,6 +18,7 @@ class GoalRepository:
             ).scalar_one()
         except NoResultFound:
             raise GoalDoesNotExistError("Goal does not exist")
+        return goal
 
     def create(self, goal: Goal) -> Goal:
         try:
@@ -39,6 +40,7 @@ class GoalRepository:
         goal_old.type = goal.type
         goal_old.target_value = goal.target_value
         goal_old.period = goal.period
+        goal_old.accumulated_value = goal.accumulated_value
         return self._commit_update(goal_old)
 
     def select_all(self, user_id: int):

@@ -83,7 +83,6 @@ class ExpensesRepository:
             expenses = self.session.execute(
                 select(Expense).where(
                     Expense.user_id == user_id,
-                    Expense.category == type,
                     Expense.date >= last_month,
                     Expense.category == category,
                 )

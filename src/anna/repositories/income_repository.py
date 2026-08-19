@@ -29,7 +29,7 @@ class IncomeRepository:
             raise IncomeDoesNotExistError("Income does not exist") from e
 
         income.name = new_income.name
-        income.target_value = new_income.value
+        income.value = new_income.value
         income.origin = new_income.origin
         income.recurrence_type = new_income.recurrence_type
 
@@ -81,9 +81,9 @@ class IncomeRepository:
         except OperationalError as e:
             raise DatabaseUnavailableError("Could not reach the database") from e
 
-    def select_by_recurrence(self, user_id: int, recurrence_type: str) -> Income:
+    def select_by_recurrence(self, user_id: int, recurrence_type: str) -> Sequence[Income]:
         try:
-            income = self.session.execute(select(Income).where(Income.user_id == user_id, Income.name == recurrence_type)).scalar_one()
+            income = self.session.execute(select(Income).where(Income.user_id == user_id, Income.recurrence_type == recurrence_type)).scalars().all()
             return income
         except NoResultFound as e:
             raise IncomeDoesNotExistError("Income does not exist") from e

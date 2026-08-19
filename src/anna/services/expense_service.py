@@ -69,3 +69,6 @@ class ExpensesService:
     def select_by_category_last_month(self, user_id, category: str) -> Sequence[Expense]:
         return self.repository.select_last_month_by_category(user_id, category)
 
+    def select_by_year(self, user_id: int, year: int) -> Sequence[Expense]:
+        return self.repository.select_by_year(user_id, year)
+

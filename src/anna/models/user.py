@@ -16,7 +16,7 @@ class User(Base):
     free_access: Mapped[bool] = mapped_column(default=False)
 
     def __repr__(self) -> str:
-        return f"User(id={self.id!r}, name={self.name!r}, access={self.free_access!r}, added_at={self.added_at!r}, role={self.role!r})"
+        return f"User(id={self.id!r}, name={self.name!r}, access={self.free_access!r}, added_at={self.added_at!r})"
 
 class Subscription(Base):
     __tablename__ = "subscriptions"

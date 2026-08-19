@@ -25,7 +25,7 @@ class IncomeService:
             recurrence_type=data.recurrence_type,
             user_id=user_id
         )
-        return self.repository.create(user_id, income)
+        return self.repository.create(income)
 
     def update(self, user_id: int, income_name: str, data: IncomeDTO) -> Income:
         income = Income(
@@ -48,5 +48,5 @@ class IncomeService:
     def select_by_name(self, user_id: int, income_name: str) -> Income:
         return self.repository.select_by_name(user_id, income_name)
 
-    def select_by_recurrence_type(self, user_id: int, income_recurrence: str) -> Income:
+    def select_by_recurrence_type(self, user_id: int, income_recurrence: str) -> Sequence[Income]:
         return self.repository.select_by_recurrence(user_id, income_recurrence)

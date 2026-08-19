@@ -40,15 +40,16 @@ class SubscriptionRepository:
     def update(self, subscription_id: int, user_id: int, subscription: Subscription) -> Subscription:
         subs = self.__find_subs_by_id(subscription_id, user_id)
         subs.plan = subscription.plan
-        subscription.plan_recurrence = subscription.plan_recurrence
-        subscription.cancelled_at = subscription.cancelled_at
-        subscription.status = subscription.status
+        subs.plan_recurrence = subscription.plan_recurrence
+        subs.cancelled_at = subscription.cancelled_at
+        subs.status = subscription.status
         try:
             self.session.commit()
-            self.session.refresh(subscription)
-            return subscription
+            self.session.refresh(subs)
+            return subs
         except IntegrityError as e:
             self.session.rollback()
             raise SubscriptionAlreadyExistsError("Subscription already exists") from e
         except OperationalError as e:
             self.session.rollback()
+            raise DatabaseUnavailableError("Could not reach the database") from e

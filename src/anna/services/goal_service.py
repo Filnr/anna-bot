@@ -23,24 +23,30 @@ class GoalService:
             name=data.name,
             userId=userid,
             type=data.type,
-            value=data.value,
+            target_value=data.value,
+            accumulated_value=data.accumulated_value,
             period=data.period,
         )
         return self.repository.create(goal)
 
-    def update(self, user_id: int, old_name_goal: str,goal: GoalDTO) -> Goal:
+    def update(self, user_id: int, old_name_goal: str, data: GoalDTO) -> Goal:
         goal = Goal(
-            name=old_name_goal,
+            name=data.name,
             userId=user_id,
-            type=goal.type,
-            value=goal.value,
-            period=goal.period,
-            accumulated_value=goal.accumulated_value,
+            type=data.type,
+            target_value=data.value,
+            period=data.period,
+            accumulated_value=data.accumulated_value,
         )
         return self.repository.update(user_id, old_name_goal, goal)
 
     def delete(self, userId: int, goal_name: str) -> bool:
         return self.repository.delete(userId, goal_name)
+
+    def contribute(self, user_id: int, goal_name: str, amount: float) -> Goal:
+        goal = self.repository.select_name(goal_name, user_id)
+        new_accumulated_value = goal.accumulated_value + amount
+        return self.repository.insert_accumulated_value(user_id, goal_name, new_accumulated_value)
 
     def select_all(self, userId: int) -> list[Goal]:
         return self.repository.select_all(userId)
@@ -49,5 +55,5 @@ class GoalService:
         return self.repository.select_latest(userId)
 
     def select_goal(self, user_id: int, goal_name: str) -> Goal:
-        return self.repository.select_goal(user_id,goal_name)
+        return self.repository.select_name(goal_name, user_id)
 

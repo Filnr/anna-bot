@@ -38,7 +38,7 @@ def test_create_create():
 
     resultado = service.update(user_id, data.name, update)
     assert resultado.name == "Testando"
-    assert resultado.target_value == 50000
+    assert resultado.target_value == 10000
     assert resultado.accumulated_value == 0
 
 

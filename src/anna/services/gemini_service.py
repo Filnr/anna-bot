@@ -116,13 +116,17 @@ register_goal_tool = {
     "parameters": {
         "type": "object",
         "properties": {
-            "name": {"type": "string", "description": "Name of the financial goal."},
-            "type": {"type": "string", "description": "Type/category of goal (e.g. 'Emergency', 'Travel', 'Investment')."},
+            "name": {"type": "string", "description": "Name of the financial goal (e.g. 'Novo celular', 'Reserva de emergência')."},
+            "type": {
+                "type": "string",
+                "enum": ["e", "c"],
+                "description": "'e' for a savings goal with no fixed purchase (e.g. emergency fund), 'c' for a goal to buy a specific item.",
+            },
             "value": {"type": "number", "description": "Target monetary value for the goal."},
             "accumulated_value": {"type": "number", "description": "Amount already saved so far, if mentioned. Default is 0."},
             "period": {
                 "type": "string",
-                "enum": ["weekly", "monthly", "quarterly", "yearly"],
+                "enum": ["weekly", "monthly", "quarterly", "yearly", "once"],
                 "description": "Timeframe/periodicity to reach the goal.",
             },
         },
@@ -137,16 +141,218 @@ get_all_goals_tool = {
     "parameters": {"type": "object", "properties": {}, "required": []},
 }
 
+get_goal_tool = {
+    "type": "function",
+    "name": "get_goal",
+    "description": "Retrieve a single financial goal by its exact name.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "goal_name": {"type": "string", "description": "Exact name of the goal."},
+        },
+        "required": ["goal_name"],
+    },
+}
+
+update_goal_tool = {
+    "type": "function",
+    "name": "update_goal",
+    "description": "Update an existing financial goal, identified by its current name. All fields must be provided with their new (or unchanged) values.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "goal_name": {"type": "string", "description": "Current name of the goal to update."},
+            "new_name": {"type": "string", "description": "New name for the goal (same as goal_name if not renaming)."},
+            "type": {
+                "type": "string",
+                "enum": ["e", "c"],
+                "description": "'e' for a savings goal with no fixed purchase, 'c' for a goal to buy a specific item.",
+            },
+            "value": {"type": "number", "description": "New target monetary value for the goal."},
+            "accumulated_value": {"type": "number", "description": "New amount already saved."},
+            "period": {
+                "type": "string",
+                "enum": ["weekly", "monthly", "quarterly", "yearly", "once"],
+                "description": "Timeframe/periodicity to reach the goal.",
+            },
+        },
+        "required": ["goal_name", "new_name", "type", "value", "accumulated_value", "period"],
+    },
+}
+
+delete_goal_tool = {
+    "type": "function",
+    "name": "delete_goal",
+    "description": "Delete a financial goal by its exact name.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "goal_name": {"type": "string", "description": "Exact name of the goal to delete."},
+        },
+        "required": ["goal_name"],
+    },
+}
+
+contribute_to_goal_tool = {
+    "type": "function",
+    "name": "contribute_to_goal",
+    "description": "Add money to a goal's accumulated (saved) value, e.g. when the user says they saved/deposited towards a goal.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "goal_name": {"type": "string", "description": "Exact name of the goal."},
+            "amount": {"type": "number", "description": "Amount of money to add to the goal's accumulated value."},
+        },
+        "required": ["goal_name", "amount"],
+    },
+}
+
+update_expense_tool = {
+    "type": "function",
+    "name": "update_expense",
+    "description": "Update an existing expense, identified by its id. Use get_expenses_by_month or get_last_month_expenses first to find the correct expense_id.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "expense_id": {"type": "integer", "description": "Id of the expense to update."},
+            "value": {"type": "number", "description": "New monetary value of the expense."},
+            "name": {"type": "string", "description": "New name or description of the expense."},
+            "category": {"type": "string", "description": "New expense category."},
+            "recurrence_type": {
+                "type": "string",
+                "enum": ["monthly", "annual", "weekly", "only-time"],
+                "description": "New recurrence pattern of the expense.",
+            },
+        },
+        "required": ["expense_id", "value", "name", "category", "recurrence_type"],
+    },
+}
+
+delete_expense_tool = {
+    "type": "function",
+    "name": "delete_expense",
+    "description": "Delete an expense by its id. Use get_expenses_by_month or get_last_month_expenses first to find the correct expense_id.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "expense_id": {"type": "integer", "description": "Id of the expense to delete."},
+        },
+        "required": ["expense_id"],
+    },
+}
+
+get_expenses_by_category_tool = {
+    "type": "function",
+    "name": "get_last_month_expenses_by_category",
+    "description": "Retrieve the user's expenses from the previous month, filtered by category.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "category": {"type": "string", "description": "Expense category to filter by (e.g. 'food', 'transport')."},
+        },
+        "required": ["category"],
+    },
+}
+
+get_expenses_by_year_tool = {
+    "type": "function",
+    "name": "get_expenses_by_year",
+    "description": "Retrieve all of the user's registered expenses for a specific year.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "year": {"type": "integer", "description": "Year to retrieve expenses for (e.g. 2026)."},
+        },
+        "required": ["year"],
+    },
+}
+
+update_income_tool = {
+    "type": "function",
+    "name": "update_income",
+    "description": "Update an existing income, identified by its current name. All fields must be provided with their new (or unchanged) values.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "income_name": {"type": "string", "description": "Current name of the income to update."},
+            "new_name": {"type": "string", "description": "New name for the income (same as income_name if not renaming)."},
+            "value": {"type": "number", "description": "New monetary value received."},
+            "origin": {"type": "string", "description": "New origin of the income."},
+            "recurrence_type": {
+                "type": "string",
+                "enum": ["monthly", "annual", "weekly"],
+                "description": "New recurrence type of the income.",
+            },
+        },
+        "required": ["income_name", "new_name", "value", "origin", "recurrence_type"],
+    },
+}
+
+delete_income_tool = {
+    "type": "function",
+    "name": "delete_income",
+    "description": "Delete an income by its exact name.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "income_name": {"type": "string", "description": "Exact name of the income to delete."},
+        },
+        "required": ["income_name"],
+    },
+}
+
+get_income_tool = {
+    "type": "function",
+    "name": "get_income",
+    "description": "Retrieve a single income entry by its exact name.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "income_name": {"type": "string", "description": "Exact name of the income."},
+        },
+        "required": ["income_name"],
+    },
+}
+
+get_incomes_by_recurrence_tool = {
+    "type": "function",
+    "name": "get_incomes_by_recurrence",
+    "description": "Retrieve all incomes matching a given recurrence type (e.g. all monthly incomes).",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "recurrence_type": {
+                "type": "string",
+                "enum": ["monthly", "annual", "weekly"],
+                "description": "Recurrence type to filter by.",
+            },
+        },
+        "required": ["recurrence_type"],
+    },
+}
+
 tools_declarations = [
     types.FunctionDeclaration(**{k: v for k, v in tool.items() if k != "type"})
     for tool in [
         register_expense_tool,
         get_expenses_by_month_tool,
         get_last_month_expenses_tool,
+        update_expense_tool,
+        delete_expense_tool,
+        get_expenses_by_category_tool,
+        get_expenses_by_year_tool,
         register_income_tool,
         get_all_incomes_tool,
+        update_income_tool,
+        delete_income_tool,
+        get_income_tool,
+        get_incomes_by_recurrence_tool,
         register_goal_tool,
         get_all_goals_tool,
+        get_goal_tool,
+        update_goal_tool,
+        delete_goal_tool,
+        contribute_to_goal_tool,
     ]
 ]
 
@@ -246,6 +452,77 @@ def get_last_month_expenses(user_id: int) -> dict:
         db.close()
 
 
+def update_expense(user_id: int, expense_id: int, value: float, name: str, category: str, recurrence_type: str) -> dict:
+    db = SessionLocal()
+    try:
+        dto = ExpenseDTO(
+            value=value,
+            name=name,
+            category=category,
+            recurrence_type=recurrence_type,
+            installment=1,
+            total_installment=1,
+        )
+        service = ExpensesService(ExpensesRepository(db))
+        expense = service.update(user_id=user_id, expense_id=expense_id, data=dto)
+        return {"status": "success", "message": f"Expense '{expense.name}' updated successfully.", "value": expense.value}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def delete_expense(user_id: int, expense_id: int) -> dict:
+    db = SessionLocal()
+    try:
+        service = ExpensesService(ExpensesRepository(db))
+        service.delete(user_id=user_id, expense_id=expense_id)
+        return {"status": "success", "message": "Expense deleted successfully."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def get_last_month_expenses_by_category(user_id: int, category: str) -> dict:
+    db = SessionLocal()
+    try:
+        service = ExpensesService(ExpensesRepository(db))
+        expenses = service.select_by_category_last_month(user_id=user_id, category=category)
+        return {
+            "status": "success",
+            "count": len(expenses),
+            "expenses": [
+                {"id": e.id, "name": e.name, "value": e.value, "category": e.category, "date": str(e.date)}
+                for e in expenses
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def get_expenses_by_year(user_id: int, year: int) -> dict:
+    db = SessionLocal()
+    try:
+        service = ExpensesService(ExpensesRepository(db))
+        expenses = service.select_by_year(user_id=user_id, year=year)
+        return {
+            "status": "success",
+            "year": year,
+            "count": len(expenses),
+            "expenses": [
+                {"id": e.id, "name": e.name, "value": e.value, "category": e.category, "date": str(e.date)}
+                for e in expenses
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
 def register_income(user_id: int, name: str, value: float, origin: str, recurrence_type: str) -> dict:
     db = SessionLocal()
     try:
@@ -264,6 +541,65 @@ def get_all_incomes(user_id: int) -> dict:
     try:
         service = IncomeService(IncomeRepository(db))
         incomes = service.select_all(user_id=user_id)
+        return {
+            "status": "success",
+            "count": len(incomes),
+            "incomes": [
+                {"name": inc.name, "value": inc.value, "origin": inc.origin, "recurrence_type": inc.recurrence_type}
+                for inc in incomes
+            ],
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def update_income(user_id: int, income_name: str, new_name: str, value: float, origin: str, recurrence_type: str) -> dict:
+    db = SessionLocal()
+    try:
+        dto = IncomeDTO(name=new_name, value=value, origin=origin, recurrence_type=recurrence_type)
+        service = IncomeService(IncomeRepository(db))
+        income = service.update(user_id=user_id, income_name=income_name, data=dto)
+        return {"status": "success", "message": f"Income '{income.name}' updated successfully.", "value": income.value}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def delete_income(user_id: int, income_name: str) -> dict:
+    db = SessionLocal()
+    try:
+        service = IncomeService(IncomeRepository(db))
+        service.delete(user_id=user_id, income_name=income_name)
+        return {"status": "success", "message": "Income deleted successfully."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def get_income(user_id: int, income_name: str) -> dict:
+    db = SessionLocal()
+    try:
+        service = IncomeService(IncomeRepository(db))
+        income = service.select_by_name(user_id=user_id, income_name=income_name)
+        return {
+            "status": "success",
+            "income": {"name": income.name, "value": income.value, "origin": income.origin, "recurrence_type": income.recurrence_type},
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def get_incomes_by_recurrence(user_id: int, recurrence_type: str) -> dict:
+    db = SessionLocal()
+    try:
+        service = IncomeService(IncomeRepository(db))
+        incomes = service.select_by_recurrence_type(user_id=user_id, income_recurrence=recurrence_type)
         return {
             "status": "success",
             "count": len(incomes),
@@ -317,14 +653,91 @@ def get_all_goals(user_id: int) -> dict:
         db.close()
 
 
+def get_goal(user_id: int, goal_name: str) -> dict:
+    db = SessionLocal()
+    try:
+        service = GoalService(GoalRepository(db))
+        goal = service.select_goal(user_id=user_id, goal_name=goal_name)
+        return {
+            "status": "success",
+            "goal": {"name": goal.name, "type": goal.type, "value": goal.target_value, "accumulated_value": goal.accumulated_value, "period": goal.period},
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def update_goal(
+    user_id: int,
+    goal_name: str,
+    new_name: str,
+    type: str,
+    value: float,
+    accumulated_value: float,
+    period: str,
+) -> dict:
+    db = SessionLocal()
+    try:
+        dto = GoalDTO(name=new_name, type=type, value=value, accumulated_value=accumulated_value, period=period)
+        service = GoalService(GoalRepository(db))
+        goal = service.update(user_id=user_id, old_name_goal=goal_name, data=dto)
+        return {"status": "success", "message": f"Goal '{goal.name}' updated successfully.", "target_value": goal.target_value}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def delete_goal(user_id: int, goal_name: str) -> dict:
+    db = SessionLocal()
+    try:
+        service = GoalService(GoalRepository(db))
+        service.delete(userId=user_id, goal_name=goal_name)
+        return {"status": "success", "message": "Goal deleted successfully."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
+def contribute_to_goal(user_id: int, goal_name: str, amount: float) -> dict:
+    db = SessionLocal()
+    try:
+        service = GoalService(GoalRepository(db))
+        goal = service.contribute(user_id=user_id, goal_name=goal_name, amount=amount)
+        return {
+            "status": "success",
+            "message": f"Added {amount} to goal '{goal.name}'.",
+            "accumulated_value": goal.accumulated_value,
+            "target_value": goal.target_value,
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+
 FUNCTION_MAP = {
     "register_expense": register_expense,
     "get_expenses_by_month": get_expenses_by_month,
     "get_last_month_expenses": get_last_month_expenses,
+    "update_expense": update_expense,
+    "delete_expense": delete_expense,
+    "get_last_month_expenses_by_category": get_last_month_expenses_by_category,
+    "get_expenses_by_year": get_expenses_by_year,
     "register_income": register_income,
     "get_all_incomes": get_all_incomes,
+    "update_income": update_income,
+    "delete_income": delete_income,
+    "get_income": get_income,
+    "get_incomes_by_recurrence": get_incomes_by_recurrence,
     "register_goal": register_goal,
     "get_all_goals": get_all_goals,
+    "get_goal": get_goal,
+    "update_goal": update_goal,
+    "delete_goal": delete_goal,
+    "contribute_to_goal": contribute_to_goal,
 }
 
 MAX_TOOL_ITERATIONS = 10
