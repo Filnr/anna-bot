@@ -7,7 +7,7 @@ from core.database import init_db
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import services.expense_service
-import services.gemini_service as gemini_service
+import services.llm_service as llm_service
 from functools import wraps  # Importante: Biblioteca nativa do Python para criar o decorador
 from services.user_service import UserService, get_user_service
 from schemas.user import UserCreateDTO
@@ -92,7 +92,7 @@ async def teste(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @require_registration
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gemini_service.reset_chat(update.effective_user.id)
+    llm_service.reset_chat(update.effective_user.id)
     await update.message.reply_text("Memória resetada. Cuidado.")
 
 
@@ -115,7 +115,7 @@ async def process_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Como a função tem o @require_registration, se o código chegou nessa linha
     # nós temos certeza absoluta que o usuário é validado!
-    response = gemini_service.chat(user_id, text)
+    response = llm_service.chat(user_id, text)
     await update.message.reply_text(response)
 
 

@@ -8,35 +8,79 @@ from schemas.expenses import ExpenseDTO
 from schemas.income import IncomeDTO
 from schemas.goal import GoalDTO
 from core.database import SessionLocal
-from google.genai import types
 from pathlib import Path
 import os
-from google import genai
+import json
+import requests
 from dotenv import load_dotenv
 import logging
 import traceback
 
 env_path = Path(__file__).parent.parent.parent.parent / '.env'
 load_dotenv(env_path)
-client = genai.Client(api_key=os.getenv("GEMINI_KEY"))
 
-MODEL = "gemini-3.1-flash-lite"
+# TEMPORÁRIO: aponta direto pro Ollama rodando no notebook-servidor (ZimaOS) via Tailscale/rede local.
+# Quando existir camada intermediária para acesso fora de casa, isso deixa de ser fixo.
+#
+# Usa a API NATIVA do Ollama (/api/chat), não o endpoint OpenAI-compat (/v1/chat/completions):
+# testado na prática que "think": false só é respeitado pela API nativa nessa versão do Ollama
+# (0.24.0) — no endpoint compat o parâmetro é ignorado e o modelo entra em raciocínio livre,
+# o que travou uma chamada com as tools reais por mais de 8 minutos.
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://192.168.15.17:11434")
+OLLAMA_CHAT_URL = f"{OLLAMA_BASE_URL}/api/chat"
+# Testado: com o modelo já carregado, uma chamada com as 19 tools reais leva ~15-20s no hardware
+# atual (CPU only). Um cold start (modelo descarregado, padrão do Ollama após 5min ocioso) pode
+# levar ~4min só pra recarregar da RAM/disco — daí o timeout generoso e o keep_alive longo abaixo
+# pra evitar que isso aconteça com frequência (RAM sobra: container tem 10,3GB reservados).
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "300"))
+OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "24h")
+
+MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+# TEMPORÁRIO: sem personalidade, só factual. Testado que com o modelo local (qwen3:8b) uma
+# persona elaborada gerava respostas estranhas/inconsistentes além de gastar tempo de geração
+# à toa. Confirmações de escrita (registrar/atualizar/excluir) nem chegam a passar por aqui —
+# são montadas 2direto em Python (ver _format_write_result) para cortar uma chamada inteira ao
+# modelo. Este prompt só entra em ação pra decidir qual tool chamar e pra resumir buscas/listas.
 SYSTEM_PROMPT = (
-    "You are Han Sooyoung — genius author who rewrote the universe, now forced by the Bureau to serve as a financial assistant to a 'Reader' on Telegram. Your goal: his financial survival, even if you despise him for needing it."
-    "VOICE: Surgical intelligence, elevated ego. Sarcasm is your default, but ECONOMICAL — one sharp line beats three clever ones."
-    "ANALYSIS: "
-    "Smart spending: one short line of reluctant acknowledgment. "
-    "Stupid spending: one short line of technical contempt. No moralizing paragraphs. "
-    "Critical patterns (debt/deficit): drop sarcasm. One sharp, serious line."
-    "TERMINOLOGY: Financial life = 'main scenario'. Mistakes = 'side character moves'. Success = 'not the death I expected'."
-    "FORMAT (STRICT): Maximum 2 short sentences per response. Never more than ~200 characters total, unless listing requested data (expenses/goals/incomes), which can use short bullet lines. Minimal markdown (*italic* only). One point per message — do not stack multiple observations."
-    "NEVER: apologize, use coach-speak, write multi-clause dramatic monologues, force the vocabulary, treat him as a protagonist when he's acting like an NPC."
-    "LANGUAGE: Always respond in Portuguese, matching the user's language, while keeping the Han Sooyoung personality — but brevity comes before personality."
+    "Você é o assistente de um bot de Telegram para controle financeiro pessoal (despesas, rendas, metas). "
+    "Responda sempre em português, de forma direta, curta e estritamente factual — sem personalidade, sem humor, sem opiniões, sem comentários sobre os gastos do usuário. "
+    "Ao listar dados (despesas, rendas, metas), use linhas curtas com marcadores, uma por item. "
+    "Não use markdown além de *itálico* quando necessário. Nunca escreva mais do que o necessário para responder."
 )
 
 # ---------------------------------------------------------------------------
 # DEFINIÇÃO DAS FERRAMENTAS (TOOLS - JSON SCHEMA)
 # ---------------------------------------------------------------------------
+
+EXPENSE_CATEGORIES = [
+    "food",
+    "games",
+    "transport",
+    "housing",
+    "health",
+    "education",
+    "entertainment",
+    "shopping",
+    "bills",
+    "subscriptions",
+    "travel",
+    "other",
+]
+
+CATEGORY_LABELS_PT = {
+    "food": "alimentação",
+    "games": "jogos",
+    "transport": "transporte",
+    "housing": "moradia",
+    "health": "saúde",
+    "education": "educação",
+    "entertainment": "entretenimento",
+    "shopping": "compras",
+    "bills": "contas",
+    "subscriptions": "assinaturas",
+    "travel": "viagem",
+    "other": "outros",
+}
 
 register_expense_tool = {
     "type": "function",
@@ -47,7 +91,11 @@ register_expense_tool = {
         "properties": {
             "value": {"type": "number", "description": "Monetary value of the expense."},
             "name": {"type": "string", "description": "Name or description of the expense."},
-            "category": {"type": "string", "description": "Expense category (e.g., 'food', 'transport', 'games')."},
+            "category": {
+                "type": "string",
+                "enum": EXPENSE_CATEGORIES,
+                "description": "Expense category. 'games' and 'food' are their own categories — do not fold them into 'entertainment'.",
+            },
             "recurrence_type": {
                 "type": "string",
                 "enum": ["monthly", "annual", "weekly", "only-time"],
@@ -217,7 +265,11 @@ update_expense_tool = {
             "expense_id": {"type": "integer", "description": "Id of the expense to update."},
             "value": {"type": "number", "description": "New monetary value of the expense."},
             "name": {"type": "string", "description": "New name or description of the expense."},
-            "category": {"type": "string", "description": "New expense category."},
+            "category": {
+                "type": "string",
+                "enum": EXPENSE_CATEGORIES,
+                "description": "New expense category. 'games' and 'food' are their own categories — do not fold them into 'entertainment'.",
+            },
             "recurrence_type": {
                 "type": "string",
                 "enum": ["monthly", "annual", "weekly", "only-time"],
@@ -248,7 +300,11 @@ get_expenses_by_category_tool = {
     "parameters": {
         "type": "object",
         "properties": {
-            "category": {"type": "string", "description": "Expense category to filter by (e.g. 'food', 'transport')."},
+            "category": {
+                "type": "string",
+                "enum": EXPENSE_CATEGORIES,
+                "description": "Expense category to filter by.",
+            },
         },
         "required": ["category"],
     },
@@ -331,8 +387,19 @@ get_incomes_by_recurrence_tool = {
     },
 }
 
-tools_declarations = [
-    types.FunctionDeclaration(**{k: v for k, v in tool.items() if k != "type"})
+def _to_openai_tool(tool: dict) -> dict:
+    return {
+        "type": "function",
+        "function": {
+            "name": tool["name"],
+            "description": tool["description"],
+            "parameters": tool["parameters"],
+        },
+    }
+
+
+TOOLS_CONFIG = [
+    _to_openai_tool(tool)
     for tool in [
         register_expense_tool,
         get_expenses_by_month_tool,
@@ -356,22 +423,21 @@ tools_declarations = [
     ]
 ]
 
-TOOLS_CONFIG = [types.Tool(function_declarations=tools_declarations)]
+# Histórico manual por usuário (sem system prompt, que é sempre prependado na chamada).
+_histories: dict[int, list[dict]] = {}
 
-_chats = {}
+# Quantos "turnos" (mensagens do usuário) manter no histórico. Cada turno pode incluir
+# várias idas e vindas de tool call — cortamos sempre no início de um turno pra nunca
+# quebrar um par tool_calls/tool no meio.
+MAX_HISTORY_TURNS = 6
 
 
-def get_chat_session(user_id: int):
-    if user_id not in _chats:
-        _chats[user_id] = client.chats.create(
-            model=MODEL,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                tools=TOOLS_CONFIG,
-                temperature=0.7,
-            )
-        )
-    return _chats[user_id]
+def _trim_history(history: list[dict]) -> list[dict]:
+    user_indices = [i for i, m in enumerate(history) if m["role"] == "user"]
+    if len(user_indices) > MAX_HISTORY_TURNS:
+        cutoff = user_indices[-MAX_HISTORY_TURNS]
+        return history[cutoff:]
+    return history
 
 
 # ---------------------------------------------------------------------------
@@ -743,38 +809,137 @@ FUNCTION_MAP = {
 MAX_TOOL_ITERATIONS = 10
 
 
+def _call_ollama(messages: list[dict]) -> dict:
+    payload = {
+        "model": MODEL,
+        "messages": messages,
+        "tools": TOOLS_CONFIG,
+        "think": False,
+        "stream": False,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
+        "options": {"temperature": 0.7},
+    }
+    resp = requests.post(OLLAMA_CHAT_URL, json=payload, timeout=OLLAMA_TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()["message"]
+
+
+# Ações de escrita (registrar/atualizar/excluir) são sempre terminais: uma vez executadas,
+# não faz sentido o modelo decidir chamar outra tool. Respondemos direto em Python — sem essa
+# segunda chamada, a resposta comum de "registrei sua despesa" fica bem mais rápida e não
+# fica sujeita ao modelo inventar/distorcer o texto.
+WRITE_FUNCTIONS = {
+    "register_expense",
+    "update_expense",
+    "delete_expense",
+    "register_income",
+    "update_income",
+    "delete_income",
+    "register_goal",
+    "update_goal",
+    "delete_goal",
+    "contribute_to_goal",
+}
+
+
+def _format_write_result(fn_name: str, fn_args: dict, result: dict) -> str:
+    if result.get("status") != "success":
+        return f"Erro: {result.get('message', 'falha desconhecida')}"
+
+    if fn_name == "register_expense":
+        label = CATEGORY_LABELS_PT.get(fn_args.get("category"), fn_args.get("category"))
+        return f"Despesa registrada: {fn_args.get('name')} ({label}) — R$ {fn_args.get('value'):.2f}"
+    if fn_name == "update_expense":
+        label = CATEGORY_LABELS_PT.get(fn_args.get("category"), fn_args.get("category"))
+        return f"Despesa atualizada: {fn_args.get('name')} ({label}) — R$ {fn_args.get('value'):.2f}"
+    if fn_name == "delete_expense":
+        return "Despesa removida com sucesso."
+
+    if fn_name == "register_income":
+        return f"Renda registrada: {fn_args.get('name')} — R$ {fn_args.get('value'):.2f}"
+    if fn_name == "update_income":
+        return f"Renda atualizada: {fn_args.get('new_name')} — R$ {fn_args.get('value'):.2f}"
+    if fn_name == "delete_income":
+        return f"Renda removida: {fn_args.get('income_name')}."
+
+    if fn_name == "register_goal":
+        return f"Meta registrada: {fn_args.get('name')} — R$ {fn_args.get('value'):.2f}"
+    if fn_name == "update_goal":
+        return f"Meta atualizada: {fn_args.get('new_name')} — R$ {fn_args.get('value'):.2f}"
+    if fn_name == "delete_goal":
+        return f"Meta removida: {fn_args.get('goal_name')}."
+    if fn_name == "contribute_to_goal":
+        accumulated = result.get("accumulated_value")
+        target = result.get("target_value")
+        return f"Contribuição registrada em '{fn_args.get('goal_name')}': +R$ {fn_args.get('amount'):.2f} (R$ {accumulated:.2f}/R$ {target:.2f})"
+
+    return result.get("message", "Ação concluída com sucesso.")
+
+
 def chat(user_id: int, message: str) -> str:
-    chat_session = get_chat_session(user_id)
+    history = _histories.setdefault(user_id, [])
+    history.append({"role": "user", "content": message})
 
     try:
-        response = chat_session.send_message(message)
-
         for _ in range(MAX_TOOL_ITERATIONS):
-            if not response.function_calls:
-                return response.text
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}, *history]
+            assistant_message = _call_ollama(messages)
+            tool_calls = assistant_message.get("tool_calls") or []
 
-            function_response_parts = []
-            for function_call in response.function_calls:
-                fn_name = function_call.name
-                fn_args = dict(function_call.args)
+            if not tool_calls:
+                content = assistant_message.get("content") or ""
+                history.append({"role": "assistant", "content": content})
+                _histories[user_id] = _trim_history(history)
+                return content
+
+            history.append({
+                "role": "assistant",
+                "content": assistant_message.get("content") or "",
+                "tool_calls": tool_calls,
+            })
+
+            calls_this_round = []
+            for i, tool_call in enumerate(tool_calls):
+                fn = tool_call["function"]
+                fn_name = fn["name"]
+                fn_args = fn.get("arguments") or {}
+                if isinstance(fn_args, str):
+                    try:
+                        fn_args = json.loads(fn_args or "{}")
+                    except json.JSONDecodeError:
+                        fn_args = {}
 
                 if fn_name in FUNCTION_MAP:
-                    fn_args["user_id"] = user_id
-                    result = FUNCTION_MAP[fn_name](**fn_args)
+                    result = FUNCTION_MAP[fn_name](user_id=user_id, **fn_args)
                 else:
                     result = {"error": f"Unknown function: {fn_name}"}
 
-                function_response_parts.append(
-                    types.Part.from_function_response(name=fn_name, response={"result": result})
-                )
+                calls_this_round.append((fn_name, fn_args, result))
+                history.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.get("id", f"call_{i}"),
+                    "content": json.dumps(result, ensure_ascii=False),
+                })
 
-            response = chat_session.send_message(function_response_parts)
+            # Rodada só com ações de escrita: responde na hora, sem gastar outra chamada ao
+            # modelo pra "narrar" o que já sabemos que aconteceu.
+            if all(fn_name in WRITE_FUNCTIONS for fn_name, _, _ in calls_this_round):
+                try:
+                    lines = [_format_write_result(fn_name, fn_args, result) for fn_name, fn_args, result in calls_this_round]
+                except Exception:
+                    lines = [result.get("message", "Ação concluída.") for _, _, result in calls_this_round]
+                reply = "\n".join(lines)
+                history.append({"role": "assistant", "content": reply})
+                _histories[user_id] = _trim_history(history)
+                return reply
 
+        _histories[user_id] = _trim_history(history)
         return "Erro: número máximo de chamadas de ferramentas excedido"
 
     except Exception as e:
-        return f"Erro ao contatar o Gemini: {e}"
+        logger.error(f"Error in chat: {e}\n{traceback.format_exc()}")
+        return f"Erro ao contatar a LLM: {e}"
 
 
 def reset_chat(user_id: int) -> None:
-    _chats.pop(user_id, None)
+    _histories.pop(user_id, None)
