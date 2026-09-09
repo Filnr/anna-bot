@@ -21,6 +21,11 @@ categoriza e registra a despesa/receita/meta automaticamente.
   (~R$1/mês). Ver pesquisa completa em `llm-migration-research.md` — opções: self-host (Qwen3-8B via
   Ollama no notebook-servidor) ou API sem depósito mínimo (DeepSeek). Ao trocar, também trocar `category`
   de string livre pra `enum` no schema das tools, pra reduzir erro de categorização.
+  - Feito: migração Gemini → Ollama (function calling na API nativa `/api/chat`); `category` já é `enum`.
+  - Feito: a camada de IA foi isolada no pacote `src/anna/ia/` (config / client / agent / tools),
+    substituindo o `services/llm_service.py` monolítico (que virou shim de compat). Endpoint e modelo
+    são 100% configuráveis por env (`OLLAMA_BASE_URL`, `OLLAMA_MODEL`) — default do código = produção;
+    dev local sobrescreve via `.env`. Trocar de backend de LLM agora mexe só em `ia/client.py`.
 - **Exportação de despesas em Excel.** Uma planilha (aba) por mês, cobrindo até 5 meses de histórico a
   depender do período solicitado pelo usuário.
 - **Análise de despesas com ML.** Ex: identificar maior gasto do período, detectar aumento anômalo de
