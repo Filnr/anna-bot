@@ -4,7 +4,7 @@ FROM python:3.13-slim
 # 2. Configurar variáveis de ambiente para o Python e Poetry
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    POETRY_VERSION=1.8.3 \
+    POETRY_VERSION=2.4.1 \
     POETRY_HOME="/opt/poetry" \
     POETRY_VIRTUALENVS_CREATE=false \
     PYTHONPATH="/app/src/anna"
