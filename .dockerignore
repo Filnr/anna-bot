@@ -6,3 +6,7 @@ __pycache__/
 .env
 .idea/
 .vscode/
+.github/
+.pytest_cache/
+tests/
+*.md

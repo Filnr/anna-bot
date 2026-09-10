@@ -1,0 +1,13 @@
+services:
+  anna-bot:
+    # Já existe CI (.github/workflows/deploy.yml) que builda e publica essa imagem a cada push
+    # em main — não precisa buildar no ZimaOS. Se preferir buildar localmente na NAS, troque a
+    # linha abaixo por: build: .
+    image: ghcr.io/filnr/anna-bot:latest
+    container_name: anna-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    # Ollama roda fora deste compose (na própria ZimaOS ou noutro host da LAN). Aponte
+    # OLLAMA_BASE_URL no .env para o IP/porta corretos — o container alcança a LAN normalmente.
+    stop_grace_period: 10s
